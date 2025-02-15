@@ -1,6 +1,44 @@
 # TinyTasks
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A React Native Expo application with Tailwind CSS integration for efficient task management.
+
+## Tech Stack
+
+- [React Native](https://reactnative.dev/) - Mobile application framework
+- [Expo](https://expo.dev) - Development platform
+- [Tailwind CSS](https://tailwindcss.com/) via [NativeWind](https://www.nativewind.dev/) - Styling
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+- [Node.js](https://nodejs.org/) (v14 or newer)
+- [npm](https://www.npmjs.com/) (comes with Node.js)
+- [Expo CLI](https://docs.expo.dev/get-started/installation/)
+- [Expo Go](https://expo.dev/client) app on your mobile device (for testing)
+
+## Setup Instructions
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/mukhil0212/TinyTasks.git
+   cd TinyTasks
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Start the development server:
+   ```bash
+   npx expo start
+   ```
+
+4. Run the app:
+   - Scan the QR code with Expo Go (Android) or Camera app (iOS)
+   - Press 'i' to open in iOS simulator
+   - Press 'a' to open in Android emulator
+   - Press 'w' to open in web browser
 
 ## Get started
 
