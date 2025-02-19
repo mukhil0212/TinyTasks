@@ -102,13 +102,49 @@ TinyTasks/
   - Prettier formatting
   - VSCode configuration
 
-## Contributing
+## Branch Management
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+This project follows a strict branching strategy to maintain code quality:
+
+- `main` - Production branch, protected from direct pushes
+- `development` - Main development branch, all features merge here first
+- `feature/*` - Feature branches for new development
+- `bugfix/*` - Bug fix branches
+- `hotfix/*` - Emergency fixes for production
+
+### Branch Workflow
+
+1. Create a new branch from `development`:
+   ```bash
+   git checkout development
+   git pull origin development
+   git checkout -b feature/your-feature-name
+   ```
+
+2. Make your changes and commit them:
+   ```bash
+   git add .
+   git commit -m "feat: your descriptive commit message"
+   ```
+
+3. Push to the development branch:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+4. Create a Pull Request to merge into `development`
+
+### Important Notes
+
+- ❌ Never push directly to `main`
+- ✅ Always create Pull Requests to `development`
+- 🔄 Keep your branch up to date with development:
+  ```bash
+  git checkout development
+  git pull origin development
+  git checkout your-branch
+  git rebase development
+  ```
 
 ## License
 
