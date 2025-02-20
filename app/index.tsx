@@ -1,32 +1,16 @@
-import { View, Text } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { useEffect, useState } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import Auth from '../components/Auth';
-import TestTailwind from '../components/TestTailwind';
+import SignIn from '../components/auth/SignIn';
+import SignUp from '../components/auth/SignUp';
+import AuthLayout from '../components/auth/AuthLayout';
 
 export default function Index() {
   const [session, setSession] = useState<Session | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<string>('Checking connection...');
+  const [isSignUp, setIsSignUp] = useState(false);
 
   useEffect(() => {
-    async function testConnection() {
-      try {
-        const { data, error } = await supabase.from('test').select('*').limit(1);
-        if (error) {
-          setConnectionStatus('Connection Error: ' + error.message);
-          console.error('Connection Error:', error.message);
-        } else {
-          setConnectionStatus('Connected to Supabase');
-        }
-      } catch (error) {
-        setConnectionStatus('Connection Error: ' + (error as Error).message);
-        console.error('Connection Error:', (error as Error).message);
-      }
-    }
-    
-    testConnection();
-    
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
     });
@@ -36,16 +20,28 @@ export default function Index() {
     });
   }, []);
 
-  return (
-    <View className="flex-1 items-center justify-center bg-gray-100 p-4">
-      <Text className="mb-4 text-gray-600">{connectionStatus}</Text>
-      <TestTailwind />
-      <View className="mt-8 w-full">
-        <Auth />
-        {session && session.user && (
-          <Text className="mt-4 text-gray-600 text-center">User ID: {session.user.id}</Text>
-        )}
+  if (session && session.user) {
+    return (
+      <View className="flex-1 items-center justify-center bg-gray-100 p-4">
+        <Text className="text-xl font-bold mb-4">Welcome!</Text>
+        <Text className="text-gray-600">User ID: {session.user.id}</Text>
+        <TouchableOpacity 
+          onPress={() => supabase.auth.signOut()}
+          className="mt-4 py-2 px-4 bg-blue-500 rounded-lg active:bg-blue-600"
+        >
+          <Text className="text-white font-medium">Sign Out</Text>
+        </TouchableOpacity>
       </View>
-    </View>
+    );
+  }
+
+  return (
+    <AuthLayout>
+      {isSignUp ? (
+        <SignUp onSignInPress={() => setIsSignUp(false)} />
+      ) : (
+        <SignIn onSignUpPress={() => setIsSignUp(true)} />
+      )}
+    </AuthLayout>
   );
 }
