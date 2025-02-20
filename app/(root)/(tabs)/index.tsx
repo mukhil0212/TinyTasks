@@ -1,10 +1,10 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 import { useEffect, useState } from 'react';
 import { Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
-import SignIn from '../components/auth/SignIn';
-import SignUp from '../components/auth/SignUp';
-import AuthLayout from '../components/auth/AuthLayout';
+import { supabase } from '../../../lib/supabase';
+import SignIn from '../../../components/auth/SignIn';
+import SignUp from '../../../components/auth/SignUp';
+import AuthLayout from '../../../components/auth/AuthLayout';
 
 export default function Index() {
   const [session, setSession] = useState<Session | null>(null);
