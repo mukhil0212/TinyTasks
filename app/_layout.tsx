@@ -12,10 +12,27 @@ export default function RootLayout() {
       "Rubik-Regular": require('../assets/fonts/Rubik-Regular.ttf'),
       "Rubik-SemiBold": require('../assets/fonts/Rubik-SemiBold.ttf')
   })
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
     <>
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: 'fade',
+        }}
+      >
         <Stack.Screen name="index" />
+        <Stack.Screen name="welcome" />
+        <Stack.Screen name="auth" />
+        <Stack.Screen 
+          name="(root)" 
+          options={{
+            animation: 'fade',
+          }}
+        />
       </Stack>
       <StatusBar style="auto" />
     </>
