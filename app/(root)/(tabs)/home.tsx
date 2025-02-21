@@ -1,13 +1,91 @@
-import { View, Text, TouchableOpacity, SafeAreaView, Image, ScrollView } from 'react-native';
-import { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, SafeAreaView, Image, ScrollView, Alert } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../../../lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router, useFocusEffect } from 'expo-router';
+import { format } from 'date-fns';
 import images from '@/constants/icons';
 import icons from '@/constants/icons';
+import { Task } from '../../../types/task';
+
+const TaskCard = ({ task, onToggleComplete }: { task: Task, onToggleComplete: (taskId: string, completed: boolean) => void }) => (
+  <TouchableOpacity 
+    className='bg-white rounded-2xl p-4 mb-3'
+    style={{ 
+      borderWidth: 1, 
+      borderColor: '#7C3AED20',
+      shadowColor: '#7C3AED',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    }}
+  >
+    <View className='flex-row items-center mb-3'>
+      <View 
+        className='w-10 h-10 rounded-xl items-center justify-center mr-3'
+        style={{ backgroundColor: task.groupColor }}
+      >
+        <Text className='text-xl'>{task.groupIcon}</Text>
+      </View>
+      <View className='flex-1'>
+        <Text className='font-rubik-medium text-base text-[#1A1A1A]' numberOfLines={1}>
+          {task.name}
+        </Text>
+        <Text className='font-rubik text-sm text-[#666876]'>
+          {task.groupName}
+        </Text>
+      </View>
+      <TouchableOpacity 
+        className='p-2 rounded-xl'
+        style={{ 
+          backgroundColor: task.completed ? '#7C3AED15' : '#F4F4F5',
+          borderWidth: 1.5,
+          borderColor: task.completed ? '#7C3AED' : '#E5E5E5',
+        }}
+        onPress={() => onToggleComplete(task.id, !task.completed)}
+      >
+        {task.completed ? (
+          <Image 
+            source={icons.star} 
+            style={{ 
+              width: 16, 
+              height: 16,
+              tintColor: '#7C3AED'
+            }}
+          />
+        ) : null}
+      </TouchableOpacity>
+    </View>
+    {task.description && (
+      <Text className='font-rubik text-sm text-[#666876] mb-3' numberOfLines={2}>
+        {task.description}
+      </Text>
+    )}
+    <View className='flex-row items-center'>
+      <View className='flex-row items-center'>
+        <Image 
+          source={icons.calendar} 
+          style={{ 
+            width: 16, 
+            height: 16,
+            tintColor: '#666876',
+            marginRight: 4
+          }}
+        />
+        <Text className='font-rubik text-xs text-[#666876]'>
+          {format(new Date(task.start_date), 'MMM d')} - {format(new Date(task.end_date), 'MMM d')}
+        </Text>
+      </View>
+    </View>
+  </TouchableOpacity>
+)
 
 export default function Home() {
   const [session, setSession] = useState<Session | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -18,6 +96,57 @@ export default function Home() {
       setSession(session);
     });
   }, []);
+
+  const fetchTasks = async () => {
+    if (!session?.user) return;
+    
+    console.log('Fetching tasks for user:', session.user.id);
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false });
+    
+    console.log('Fetched tasks:', data);
+
+    if (error) {
+      console.error('Error fetching tasks:', error);
+      return;
+    }
+
+    setTasks(data || []);
+  };
+
+  const handleToggleComplete = async (taskId: string, completed: boolean) => {
+    if (isUpdating) return;
+    setIsUpdating(true);
+
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ completed })
+        .eq('id', taskId);
+
+      if (error) throw error;
+
+      // Update local state
+      setTasks(tasks.map(task => 
+        task.id === taskId ? { ...task, completed } : task
+      ));
+    } catch (error) {
+      console.error('Error updating task:', error);
+      Alert.alert('Error', 'Failed to update task. Please try again.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Refresh tasks when the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchTasks();
+    }, [session, fetchTasks])
+  );
 
   if (!session) {
     return (
@@ -83,32 +212,43 @@ export default function Home() {
                 </TouchableOpacity>
               </View>
 
-              {/* Empty State */}
-              <View className='bg-white rounded-2xl p-6 items-center justify-center'
-                style={{ 
-                  borderWidth: 1, 
-                  borderColor: '#7C3AED20',
-                  shadowColor: '#7C3AED',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 8,
-                  elevation: 3,
-                }}
-              >
-                <Image 
-                  source={icons.calendar} 
+              {tasks.length === 0 ? (
+                <View className='bg-white rounded-2xl p-6 items-center justify-center'
                   style={{ 
-                    width: 48, 
-                    height: 48, 
-                    marginBottom: 16,
-                    tintColor: '#7C3AED40' 
+                    borderWidth: 1, 
+                    borderColor: '#7C3AED20',
+                    shadowColor: '#7C3AED',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 8,
+                    elevation: 3,
                   }}
-                />
-                <Text className='font-rubik-medium text-base text-[#1A1A1A] mb-2'>No Tasks Yet</Text>
-                <Text className='font-rubik text-sm text-[#666876] text-center'>
-                  Create your first task and start being productive!
-                </Text>
-              </View>
+                >
+                  <Image 
+                    source={icons.calendar} 
+                    style={{ 
+                      width: 48, 
+                      height: 48, 
+                      marginBottom: 16,
+                      tintColor: '#7C3AED40' 
+                    }}
+                  />
+                  <Text className='font-rubik-medium text-base text-[#1A1A1A] mb-2'>No Tasks Yet</Text>
+                  <Text className='font-rubik text-sm text-[#666876] text-center'>
+                    Create your first task and start being productive!
+                  </Text>
+                </View>
+              ) : (
+                <View>
+                  {tasks.map((task) => (
+                    <TaskCard 
+                      key={task.id} 
+                      task={task} 
+                      onToggleComplete={handleToggleComplete}
+                    />
+                  ))}
+                </View>
+              )}
             </View>
 
             {/* Quick Actions */}
@@ -116,6 +256,7 @@ export default function Home() {
               <Text className='text-xl font-rubik-bold text-[#1A1A1A] mb-4'>Quick Actions</Text>
               <View className='flex-row justify-between'>
                 <TouchableOpacity 
+                  onPress={() => router.push('/add-task')}
                   className='bg-white rounded-2xl p-4 flex-1 mr-2 items-center'
                   style={{ 
                     borderWidth: 1, 
