@@ -25,6 +25,7 @@ import laundry from "@/assets/icons/laundry.png";
 import run from "@/assets/icons/run.png";
 import location from "@/assets/icons/location.png";
 import edit from "@/assets/icons/edit.png";
+import avatar from "@/assets/images/avatar.png";
 
 export default {
   google,
@@ -54,4 +55,5 @@ export default {
   run,
   location,
   edit,
+  avatar,
 };
