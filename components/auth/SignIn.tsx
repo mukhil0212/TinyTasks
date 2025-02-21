@@ -27,7 +27,7 @@ const SignIn = ({ onSignUpPress }: SignInProps) => {
       });
 
       if (error) throw error;
-      router.push('/home');
+      router.push('/(root)/(tabs)');
     } catch (error) {
       Alert.alert('Error', error.message);
     } finally {
