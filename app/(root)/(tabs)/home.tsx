@@ -25,16 +25,16 @@ const TaskCard = ({ task, onToggleComplete }: { task: Task, onToggleComplete: (t
     <View className='flex-row items-center mb-3'>
       <View 
         className='w-10 h-10 rounded-xl items-center justify-center mr-3'
-        style={{ backgroundColor: task.groupColor }}
+        style={{ backgroundColor: task.group_color }}
       >
-        <Text className='text-xl'>{task.groupIcon}</Text>
+        <Text className='text-xl'>{task.group_icon}</Text>
       </View>
       <View className='flex-1'>
         <Text className='font-rubik-medium text-base text-[#1A1A1A]' numberOfLines={1}>
           {task.name}
         </Text>
         <Text className='font-rubik text-sm text-[#666876]'>
-          {task.groupName}
+          {task.group_name}
         </Text>
       </View>
       <TouchableOpacity 
@@ -256,7 +256,7 @@ export default function Home() {
               <Text className='text-xl font-rubik-bold text-[#1A1A1A] mb-4'>Quick Actions</Text>
               <View className='flex-row justify-between'>
                 <TouchableOpacity 
-                  onPress={() => router.push('/add-task')}
+                  onPress={() => router.push('./add-task')}
                   className='bg-white rounded-2xl p-4 flex-1 mr-2 items-center'
                   style={{ 
                     borderWidth: 1, 
