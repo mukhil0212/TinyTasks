@@ -97,17 +97,14 @@ export default function Home() {
     });
   }, []);
 
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     if (!session?.user) return;
     
-    console.log('Fetching tasks for user:', session.user.id);
     const { data, error } = await supabase
       .from('tasks')
       .select('*')
       .eq('user_id', session.user.id)
       .order('created_at', { ascending: false });
-    
-    console.log('Fetched tasks:', data);
 
     if (error) {
       console.error('Error fetching tasks:', error);
@@ -115,7 +112,7 @@ export default function Home() {
     }
 
     setTasks(data || []);
-  };
+  }, [session?.user?.id]);
 
   const handleToggleComplete = async (taskId: string, completed: boolean) => {
     if (isUpdating) return;
@@ -145,7 +142,8 @@ export default function Home() {
   useFocusEffect(
     useCallback(() => {
       fetchTasks();
-    }, [session, fetchTasks])
+      return () => {};
+    }, [fetchTasks])
   );
 
   if (!session) {
