@@ -1,10 +1,13 @@
-import { View, Text, TouchableOpacity, Image, TextInput, ScrollView, Alert } from 'react-native'
-import React, { useState } from 'react'
+import { View, Text, TouchableOpacity, Image, TextInput, ScrollView, Alert, Switch, Platform } from 'react-native'
+import React, { useState, useEffect } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
-import { format } from 'date-fns'
+import { format, addMinutes } from 'date-fns'
 import { supabase } from '../../lib/supabase'
+import { googleCalendarService } from '../../lib/googleCalendar'
+import { notificationService } from '../../lib/notifications'
+import DateTimePicker from '@react-native-community/datetimepicker'
 import icons from '@/constants/icons'
 
 interface TaskGroup {
@@ -28,9 +31,41 @@ export default function AddTask() {
   const [taskName, setTaskName] = useState('')
   const [description, setDescription] = useState('')
   const [selectedGroup, setSelectedGroup] = useState<TaskGroup | null>(taskGroups[0])
-  const [startDate, setStartDate] = useState(new Date().toISOString())
-  const [endDate, setEndDate] = useState(new Date().toISOString())
+  const [startDate, setStartDate] = useState(new Date())
+  const [endDate, setEndDate] = useState(addMinutes(new Date(), 60))
   const [isLoading, setIsLoading] = useState(false)
+  
+  // Reminder settings
+  const [reminderEnabled, setReminderEnabled] = useState(false)
+  const [reminderTime, setReminderTime] = useState(new Date())
+  const [showReminderPicker, setShowReminderPicker] = useState(false)
+  
+  // Google Calendar settings
+  const [addToGoogleCalendar, setAddToGoogleCalendar] = useState(false)
+  const [showStartPicker, setShowStartPicker] = useState(false)
+  const [showEndPicker, setShowEndPicker] = useState(false)
+
+  useEffect(() => {
+    notificationService.setupNotificationChannel()
+    notificationService.requestPermissions()
+  }, [])
+
+  const handleDateChange = (type: 'start' | 'end' | 'reminder', selectedDate?: Date) => {
+    if (!selectedDate) return;
+    
+    if (type === 'start') {
+      setStartDate(selectedDate);
+      setShowStartPicker(false);
+      // Automatically set end date to 1 hour after start date
+      setEndDate(addMinutes(selectedDate, 60));
+    } else if (type === 'end') {
+      setEndDate(selectedDate);
+      setShowEndPicker(false);
+    } else {
+      setReminderTime(selectedDate);
+      setShowReminderPicker(false);
+    }
+  };
 
   const handleAddTask = async () => {
     if (!taskName.trim()) {
@@ -41,8 +76,22 @@ export default function AddTask() {
     setIsLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      console.log('Current user:', user);
       if (!user) throw new Error('Not authenticated');
+
+      let googleEventId = null;
+      if (addToGoogleCalendar) {
+        try {
+          googleEventId = await googleCalendarService.addEventToCalendar({
+            name: taskName.trim(),
+            description: description.trim(),
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString(),
+          });
+        } catch (error) {
+          console.error('Google Calendar Error:', error);
+          Alert.alert('Warning', 'Failed to add event to Google Calendar. The task will be created without calendar integration.');
+        }
+      }
 
       const taskData = {
         name: taskName.trim(),
@@ -51,18 +100,37 @@ export default function AddTask() {
         group_name: selectedGroup?.name,
         group_icon: selectedGroup?.icon,
         group_color: selectedGroup?.color,
-        start_date: startDate,
-        end_date: endDate,
+        start_date: startDate.toISOString(),
+        end_date: endDate.toISOString(),
         completed: false,
         user_id: user.id,
         created_at: new Date().toISOString(),
+        google_calendar_event_id: googleEventId,
       };
 
-      console.log('Creating task with data:', taskData);
-      const { error, data } = await supabase.from('tasks').insert(taskData).select();
-      console.log('Insert response:', { error, data });
-
+      const { error, data: newTask } = await supabase.from('tasks').insert(taskData).select().single();
       if (error) throw error;
+
+      if (reminderEnabled && newTask) {
+        try {
+          const reminderId = await notificationService.scheduleTaskReminder({
+            id: newTask.id,
+            name: newTask.name,
+            description: newTask.description,
+            remindAt: reminderTime,
+          });
+
+          await supabase.from('reminders').insert({
+            task_id: newTask.id,
+            remind_at: reminderTime.toISOString(),
+            is_enabled: true,
+            id: reminderId,
+          });
+        } catch (error) {
+          console.error('Reminder Error:', error);
+          Alert.alert('Warning', 'Failed to set reminder. The task was created successfully.');
+        }
+      }
 
       router.back();
     } catch (error) {
@@ -236,7 +304,7 @@ export default function AddTask() {
                     />
                   </View>
                   <Text className='font-rubik-medium text-base text-[#1A1A1A]'>
-                    {startDate}
+                    {format(startDate, 'MMM d, yyyy h:mm a')}
                   </Text>
                 </View>
                 <Image 
@@ -251,11 +319,12 @@ export default function AddTask() {
             </View>
 
             {/* End Date */}
-            <View className='mt-6 mb-24'>
+            <View className='mt-6'>
               <Text className='text-sm font-rubik text-[#666876] mb-2'>
                 End Date
               </Text>
               <TouchableOpacity 
+                onPress={() => setShowEndPicker(true)}
                 className='flex-row items-center justify-between bg-white rounded-2xl p-4'
                 style={{ 
                   borderWidth: 1, 
@@ -279,7 +348,7 @@ export default function AddTask() {
                     />
                   </View>
                   <Text className='font-rubik-medium text-base text-[#1A1A1A]'>
-                    {endDate}
+                    {format(endDate, 'MMM d, yyyy h:mm a')}
                   </Text>
                 </View>
                 <Image 
@@ -292,6 +361,135 @@ export default function AddTask() {
                 />
               </TouchableOpacity>
             </View>
+
+            {/* Reminder */}
+            <View className='mt-6'>
+              <Text className='text-sm font-rubik text-[#666876] mb-2'>
+                Reminder
+              </Text>
+              <View 
+                className='bg-white rounded-2xl p-4'
+                style={{ 
+                  borderWidth: 1, 
+                  borderColor: '#7C3AED20',
+                  shadowColor: '#7C3AED',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 4,
+                  elevation: 2,
+                }}
+              >
+                <View className='flex-row items-center justify-between'>
+                  <View className='flex-row items-center'>
+                    <View className='bg-[#7C3AED15] p-2 rounded-lg mr-3'>
+                      <Image 
+                        source={icons.bell} 
+                        style={{ 
+                          width: 20, 
+                          height: 20,
+                          tintColor: '#7C3AED' 
+                        }}
+                      />
+                    </View>
+                    <Text className='font-rubik-medium text-base text-[#1A1A1A]'>
+                      Set Reminder
+                    </Text>
+                  </View>
+                  <Switch
+                    value={reminderEnabled}
+                    onValueChange={setReminderEnabled}
+                    trackColor={{ false: '#7C3AED20', true: '#7C3AED40' }}
+                    thumbColor={reminderEnabled ? '#7C3AED' : '#666876'}
+                  />
+                </View>
+                {reminderEnabled && (
+                  <TouchableOpacity 
+                    onPress={() => setShowReminderPicker(true)}
+                    className='mt-4 flex-row items-center justify-between'
+                  >
+                    <Text className='font-rubik text-[#666876]'>
+                      Remind me at
+                    </Text>
+                    <Text className='font-rubik-medium text-[#7C3AED]'>
+                      {format(reminderTime, 'MMM d, yyyy h:mm a')}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Google Calendar */}
+            <View className='mt-6 mb-24'>
+              <Text className='text-sm font-rubik text-[#666876] mb-2'>
+                Google Calendar
+              </Text>
+              <View 
+                className='bg-white rounded-2xl p-4'
+                style={{ 
+                  borderWidth: 1, 
+                  borderColor: '#7C3AED20',
+                  shadowColor: '#7C3AED',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 4,
+                  elevation: 2,
+                }}
+              >
+                <View className='flex-row items-center justify-between'>
+                  <View className='flex-row items-center'>
+                    <View className='bg-[#7C3AED15] p-2 rounded-lg mr-3'>
+                      <Image 
+                        source={icons.calendar} 
+                        style={{ 
+                          width: 20, 
+                          height: 20,
+                          tintColor: '#7C3AED' 
+                        }}
+                      />
+                    </View>
+                    <Text className='font-rubik-medium text-base text-[#1A1A1A]'>
+                      Add to Google Calendar
+                    </Text>
+                  </View>
+                  <Switch
+                    value={addToGoogleCalendar}
+                    onValueChange={setAddToGoogleCalendar}
+                    trackColor={{ false: '#7C3AED20', true: '#7C3AED40' }}
+                    thumbColor={addToGoogleCalendar ? '#7C3AED' : '#666876'}
+                  />
+                </View>
+              </View>
+            </View>
+
+            {/* Date Pickers */}
+            {showStartPicker && (
+              <DateTimePicker
+                value={startDate}
+                mode="datetime"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(event, date) => handleDateChange('start', date)}
+              />
+            )}
+
+            {showEndPicker && (
+              <DateTimePicker
+                value={endDate}
+                mode="datetime"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(event, date) => handleDateChange('end', date)}
+                minimumDate={startDate}
+              />
+            )}
+
+            {showReminderPicker && (
+              <DateTimePicker
+                value={reminderTime}
+                mode="datetime"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(event, date) => handleDateChange('reminder', date)}
+                maximumDate={startDate}
+              />
+            )}
           </View>
         </ScrollView>
 

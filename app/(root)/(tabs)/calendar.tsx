@@ -1,12 +1,74 @@
-import { View, Text, SafeAreaView, ScrollView } from 'react-native';
-import React, { useState, useEffect } from 'react';
+import { View, Text, SafeAreaView, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
+import { supabase } from '../../../lib/supabase';
+import { Task } from '../../../types/task';
+import { format, isSameDay, isToday, parseISO } from 'date-fns';
+import { googleCalendarService } from '../../../lib/googleCalendar';
+import icons from '@/constants/icons';
+import { useFocusEffect } from 'expo-router';
 
-const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const daysOfWeek = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [days, setDays] = useState<(number | null)[][]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const today = new Date();
+
+  const handleGoogleCalendarConnect = async () => {
+    try {
+      setIsLoading(true);
+      await googleCalendarService.signIn();
+      setGoogleCalendarConnected(true);
+      Alert.alert('Success', 'Connected to Google Calendar!');
+      await fetchTasks(); // Refresh tasks to include Google Calendar events
+    } catch (error) {
+      console.error('Google Calendar Connection Error:', error);
+      Alert.alert('Error', 'Failed to connect to Google Calendar');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const checkGoogleCalendarConnection = useCallback(async () => {
+    try {
+      await googleCalendarService.signIn();
+      setGoogleCalendarConnected(true);
+    } catch (error) {
+      console.log('Not connected to Google Calendar');
+      setGoogleCalendarConnected(false);
+    }
+  }, []);
+
+  const fetchTasks = useCallback(async () => {
+    const { data: session } = await supabase.auth.getSession();
+    if (!session?.session?.user) return;
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', session.session.user.id)
+      .order('start_date', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching tasks:', error);
+      return;
+    }
+
+    setTasks(data || []);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchTasks();
+      checkGoogleCalendarConnection();
+      return () => {};
+    }, [fetchTasks, checkGoogleCalendarConnection])
+  );
 
   useEffect(() => {
     generateCalendar(currentDate);
@@ -35,21 +97,84 @@ const Calendar = () => {
     setDays(weeks);
   };
 
+  const getTasksForDate = (date: Date) => {
+    return tasks.filter(task => {
+      const taskStartDate = typeof task.start_date === 'string' ? parseISO(task.start_date) : task.start_date;
+      return isSameDay(taskStartDate, date);
+    });
+  };
+
+  const navigateMonth = (direction: 'prev' | 'next') => {
+    const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + (direction === 'next' ? 1 : -1));
+    setCurrentDate(newDate);
+  };
+
   return (
-    <LinearGradient colors={['#FFFFFF', '#F8F9FF']} style={{ flex: 1 }}>
+    <LinearGradient
+      colors={['#FFFFFF', '#F8F9FF', '#FAE1FA', '#FFF9FF']}
+      locations={[0, 0.36, 0.70, 0.979]}
+      style={{ flex: 1 }}
+    >
       <SafeAreaView className="flex-1">
-        <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 10 }}>
-          {/* Header with Month & Year */}
-          <View className="mt-12 mb-4">
-            <Text className="text-xl font-rubik-bold text-[#1A1A1A] text-center">
-              {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
-            </Text>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20 }}>
+          {/* Header */}
+          <View className="mt-12 mb-2">
+            <View className="flex-row items-center justify-between mb-1">
+              <Text className="text-2xl font-rubik-bold text-[#1A1A1A]">
+                {months[currentDate.getMonth()]}
+              </Text>
+              <View className="flex-row items-center gap-2">
+                <TouchableOpacity 
+                  onPress={() => navigateMonth('prev')}
+                  className="bg-[#7C3AED15] p-2 rounded-xl"
+                  style={{ borderWidth: 1.5, borderColor: '#7C3AED20' }}
+                >
+                  <Image 
+                    source={icons.backArrow} 
+                    style={{ width: 18, height: 18, tintColor: '#7C3AED' }}
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  onPress={() => navigateMonth('next')}
+                  className="bg-[#7C3AED15] p-2 rounded-xl"
+                  style={{ borderWidth: 1.5, borderColor: '#7C3AED20' }}
+                >
+                  <Image 
+                    source={icons.backArrow} 
+                    style={{ width: 18, height: 18, transform: [{ rotate: '180deg' }], tintColor: '#7C3AED' }}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <Text className="text-base font-rubik text-[#666876]">{currentDate.getFullYear()}</Text>
           </View>
 
+          {/* Google Calendar Integration */}
+          {!googleCalendarConnected && (
+            <TouchableOpacity 
+              onPress={handleGoogleCalendarConnect}
+              className="mb-4 bg-[#7C3AED15] p-4 rounded-2xl flex-row items-center justify-center"
+              style={{ borderWidth: 1.5, borderColor: '#7C3AED30' }}
+            >
+              <Image 
+                source={icons.calendar} 
+                style={{ width: 20, height: 20, tintColor: '#7C3AED', marginRight: 8 }} 
+              />
+              <Text className="font-rubik-medium text-[#7C3AED]">Connect Google Calendar</Text>
+            </TouchableOpacity>
+          )}
+
           {/* Days of the Week */}
-          <View className="flex-row justify-between mb-2">
+          <View 
+            className="flex-row justify-between mb-4 mt-2 px-1 py-2 rounded-2xl bg-[#7C3AED08]"
+            style={{ borderWidth: 1, borderColor: '#7C3AED15' }}
+          >
             {daysOfWeek.map((day, index) => (
-              <Text key={index} className="text-sm font-bold text-[#666876] flex-1 text-center">
+              <Text 
+                key={index} 
+                className={`text-xs font-rubik-medium flex-1 text-center ${index === 0 || index === 6 ? 'text-[#7C3AED]' : 'text-[#666876]'}`}
+              >
                 {day}
               </Text>
             ))}
@@ -58,27 +183,55 @@ const Calendar = () => {
           {/* Calendar Grid - Fully Responsive */}
           <View className="flex flex-col">
             {days.map((week, weekIndex) => (
-              <View key={weekIndex} className="flex-row">
-                {week.map((day, dayIndex) => (
-                  <View
-                    key={dayIndex}
-                    className="flex-1 aspect-square justify-center items-center rounded-lg m-1"
-                    style={{
-                      backgroundColor: day !== null ? '#FFFFFF' : 'transparent',
-                      borderWidth: day !== null ? 1 : 0,
-                      borderColor: '#7C3AED20',
-                      shadowColor: day !== null ? '#7C3AED' : 'transparent',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.1,
-                      shadowRadius: 4,
-                      elevation: 2,
-                    }}
-                  >
-                    {day !== null && (
-                      <Text className="text-base font-rubik-medium text-[#1A1A1A]">{day}</Text>
-                    )}
-                  </View>
-                ))}
+              <View key={weekIndex} className="flex-row mb-2">
+                {week.map((day, dayIndex) => {
+                  if (day === null) {
+                    return (
+                      <View
+                        key={dayIndex}
+                        className="flex-1 aspect-square m-1"
+                      />
+                    );
+                  }
+
+                  const currentDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+                  const dayTasks = getTasksForDate(currentDay);
+                  const isCurrentDay = isToday(currentDay);
+
+                  return (
+                    <TouchableOpacity
+                      key={dayIndex}
+                      className={`flex-1 aspect-square justify-center items-center rounded-2xl m-1 ${isCurrentDay ? 'bg-[#7C3AED]' : dayTasks.length > 0 ? 'bg-[#7C3AED08]' : 'bg-white'}`}
+                      style={{
+                        borderWidth: 1.5,
+                        borderColor: isCurrentDay ? '#7C3AED' : dayTasks.length > 0 ? '#7C3AED30' : '#7C3AED15',
+                        shadowColor: '#7C3AED',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 8,
+                        elevation: 3,
+                      }}
+                    >
+                      <View className="items-center">
+                        <Text 
+                          className={`text-base font-rubik-medium mb-1 ${isCurrentDay ? 'text-white' : dayTasks.length > 0 ? 'text-[#7C3AED]' : 'text-[#1A1A1A]'}`}
+                        >
+                          {day}
+                        </Text>
+                        {dayTasks.length > 0 && (
+                          <View className="flex-row gap-1">
+                            {dayTasks.slice(0, 3).map((_, i) => (
+                              <View 
+                                key={i} 
+                                className={`w-1.5 h-1.5 rounded-full ${isCurrentDay ? 'bg-white' : 'bg-[#7C3AED]'} ${i === 1 ? 'opacity-70' : i === 2 ? 'opacity-40' : ''}`} 
+                              />
+                            ))}
+                          </View>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             ))}
           </View>

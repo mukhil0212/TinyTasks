@@ -1,3 +1,10 @@
+export interface Reminder {
+  id: string;
+  task_id: string;
+  remind_at: string;
+  is_enabled: boolean;
+}
+
 export interface Task {
   id: string;
   name: string;
@@ -11,4 +18,6 @@ export interface Task {
   completed: boolean;
   user_id: string;
   created_at: string;
+  reminder?: Reminder;
+  google_calendar_event_id?: string;
 }
