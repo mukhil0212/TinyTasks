@@ -4,9 +4,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../../lib/supabase';
 import { Task } from '../../../types/task';
 import { format, isSameDay, isToday, parseISO } from 'date-fns';
-import { googleCalendarService } from '../../../lib/googleCalendar';
+import { nylasCalendarService } from '../../../lib/nylasCalendar';
+import * as WebBrowser from 'expo-web-browser';
 import icons from '@/constants/icons';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 
 const daysOfWeek = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -15,32 +16,51 @@ const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [days, setDays] = useState<(number | null)[][]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false);
+  const [nylasConnected, setNylasConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [nylasToken, setNylasToken] = useState<string | null>(null);
   const today = new Date();
 
-  const handleGoogleCalendarConnect = async () => {
+  const handleNylasConnect = async () => {
     try {
       setIsLoading(true);
-      await googleCalendarService.signIn();
-      setGoogleCalendarConnected(true);
-      Alert.alert('Success', 'Connected to Google Calendar!');
-      await fetchTasks(); // Refresh tasks to include Google Calendar events
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.user?.email) {
+        throw new Error('No user email found');
+      }
+
+      const authUrl = await nylasCalendarService.authorize(session.session.user.email);
+      const result = await WebBrowser.openAuthSessionAsync(authUrl);
+      
+      if (result.type === 'success' && result.url) {
+        const code = new URL(result.url).searchParams.get('code');
+        if (!code) throw new Error('No authorization code received');
+
+        const token = await nylasCalendarService.exchangeCodeForToken(code);
+        setNylasToken(token);
+        setNylasConnected(true);
+        Alert.alert('Success', 'Connected to Calendar!');
+        await fetchTasks();
+      }
     } catch (error) {
-      console.error('Google Calendar Connection Error:', error);
-      Alert.alert('Error', 'Failed to connect to Google Calendar');
+      console.error('Nylas Calendar Connection Error:', error);
+      Alert.alert('Error', 'Failed to connect to Calendar');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const checkGoogleCalendarConnection = useCallback(async () => {
-    try {
-      await googleCalendarService.signIn();
-      setGoogleCalendarConnected(true);
-    } catch (error) {
-      console.log('Not connected to Google Calendar');
-      setGoogleCalendarConnected(false);
+  const checkNylasConnection = useCallback(async () => {
+    const token = await supabase
+      .from('user_settings')
+      .select('nylas_token')
+      .single();
+    
+    if (token?.data?.nylas_token) {
+      setNylasToken(token.data.nylas_token);
+      setNylasConnected(true);
+    } else {
+      setNylasConnected(false);
     }
   }, []);
 
@@ -65,9 +85,9 @@ const Calendar = () => {
   useFocusEffect(
     useCallback(() => {
       fetchTasks();
-      checkGoogleCalendarConnection();
+      checkNylasConnection();
       return () => {};
-    }, [fetchTasks, checkGoogleCalendarConnection])
+    }, [fetchTasks, checkNylasConnection])
   );
 
   useEffect(() => {
@@ -151,9 +171,9 @@ const Calendar = () => {
           </View>
 
           {/* Google Calendar Integration */}
-          {!googleCalendarConnected && (
+          {!nylasConnected && (
             <TouchableOpacity 
-              onPress={handleGoogleCalendarConnect}
+              onPress={handleNylasConnect}
               className="mb-4 bg-[#7C3AED15] p-4 rounded-2xl flex-row items-center justify-center"
               style={{ borderWidth: 1.5, borderColor: '#7C3AED30' }}
             >
@@ -161,7 +181,7 @@ const Calendar = () => {
                 source={icons.calendar} 
                 style={{ width: 20, height: 20, tintColor: '#7C3AED', marginRight: 8 }} 
               />
-              <Text className="font-rubik-medium text-[#7C3AED]">Connect Google Calendar</Text>
+              <Text className="font-rubik-medium text-[#7C3AED]">Connect Calendar</Text>
             </TouchableOpacity>
           )}
 

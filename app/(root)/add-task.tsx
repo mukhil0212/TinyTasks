@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
 import { format, addMinutes } from 'date-fns'
 import { supabase } from '../../lib/supabase'
-import { googleCalendarService } from '../../lib/googleCalendar'
+
 import { notificationService } from '../../lib/notifications'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import icons from '@/constants/icons'
@@ -40,8 +40,7 @@ export default function AddTask() {
   const [reminderTime, setReminderTime] = useState(new Date())
   const [showReminderPicker, setShowReminderPicker] = useState(false)
   
-  // Google Calendar settings
-  const [addToGoogleCalendar, setAddToGoogleCalendar] = useState(false)
+
   const [showStartPicker, setShowStartPicker] = useState(false)
   const [showEndPicker, setShowEndPicker] = useState(false)
 
@@ -78,20 +77,7 @@ export default function AddTask() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      let googleEventId = null;
-      if (addToGoogleCalendar) {
-        try {
-          googleEventId = await googleCalendarService.addEventToCalendar({
-            name: taskName.trim(),
-            description: description.trim(),
-            startDate: startDate.toISOString(),
-            endDate: endDate.toISOString(),
-          });
-        } catch (error) {
-          console.error('Google Calendar Error:', error);
-          Alert.alert('Warning', 'Failed to add event to Google Calendar. The task will be created without calendar integration.');
-        }
-      }
+
 
       const taskData = {
         name: taskName.trim(),
@@ -105,7 +91,7 @@ export default function AddTask() {
         completed: false,
         user_id: user.id,
         created_at: new Date().toISOString(),
-        google_calendar_event_id: googleEventId,
+
       };
 
       const { error, data: newTask } = await supabase.from('tasks').insert(taskData).select().single();
@@ -418,48 +404,7 @@ export default function AddTask() {
               </View>
             </View>
 
-            {/* Google Calendar */}
-            <View className='mt-6 mb-24'>
-              <Text className='text-sm font-rubik text-[#666876] mb-2'>
-                Google Calendar
-              </Text>
-              <View 
-                className='bg-white rounded-2xl p-4'
-                style={{ 
-                  borderWidth: 1, 
-                  borderColor: '#7C3AED20',
-                  shadowColor: '#7C3AED',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 4,
-                  elevation: 2,
-                }}
-              >
-                <View className='flex-row items-center justify-between'>
-                  <View className='flex-row items-center'>
-                    <View className='bg-[#7C3AED15] p-2 rounded-lg mr-3'>
-                      <Image 
-                        source={icons.calendar} 
-                        style={{ 
-                          width: 20, 
-                          height: 20,
-                          tintColor: '#7C3AED' 
-                        }}
-                      />
-                    </View>
-                    <Text className='font-rubik-medium text-base text-[#1A1A1A]'>
-                      Add to Google Calendar
-                    </Text>
-                  </View>
-                  <Switch
-                    value={addToGoogleCalendar}
-                    onValueChange={setAddToGoogleCalendar}
-                    trackColor={{ false: '#7C3AED20', true: '#7C3AED40' }}
-                    thumbColor={addToGoogleCalendar ? '#7C3AED' : '#666876'}
-                  />
-                </View>
-              </View>
-            </View>
+
 
             {/* Date Pickers */}
             {showStartPicker && (
