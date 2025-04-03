@@ -34,10 +34,11 @@ const SignIn = ({ onSignUpPress }: SignInProps) => {
       }
 
       console.log('Sign in successful:', data.user);
-      router.replace('/(root)/(tabs)/home');
-    } catch (error) {
+      router.replace('/home');
+    } catch (error: unknown) {
       console.error('Sign in error details:', error);
-      Alert.alert('Error', error.message || 'Failed to sign in. Please check your credentials.');
+      const message = error instanceof Error ? error.message : 'Failed to sign in. Please check your credentials.';
+      Alert.alert('Error', message);
     } finally {
       setLoading(false);
     }
@@ -54,8 +55,9 @@ const SignIn = ({ onSignUpPress }: SignInProps) => {
       const { error } = await supabase.auth.resetPasswordForEmail(email);
       if (error) throw error;
       Alert.alert('Success', 'Password reset instructions sent to your email');
-    } catch (error) {
-      Alert.alert('Error', error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'An error occurred';
+      Alert.alert('Error', message);
     } finally {
       setLoading(false);
     }

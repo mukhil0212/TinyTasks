@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, SafeAreaView, Image, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, SafeAreaView, Image, ScrollView, Alert, ActivityIndicator, Modal } from 'react-native';
 import React, { useEffect, useState, useCallback } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../../../lib/supabase';
@@ -9,18 +9,110 @@ import icons from '@/constants/icons';
 import { voiceService } from '../../../lib/voiceService';
 import { Task } from '../../../types/task';
 
-const TaskCard = ({ task, onToggleComplete }: { task: Task, onToggleComplete: (taskId: string, completed: boolean) => void }) => (
-  <TouchableOpacity 
-    className='bg-white rounded-2xl p-4 mb-3'
-    style={{ 
-      borderWidth: 1, 
-      borderColor: '#7C3AED20',
-      shadowColor: '#7C3AED',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 2,
-    }}
+const TaskDetailsModal = ({ task, visible, onClose }: { task: Task, visible: boolean, onClose: () => void }) => (
+  <Modal
+    animationType="slide"
+    transparent={true}
+    visible={visible}
+    onRequestClose={onClose}
+  >
+    <View className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+      <TouchableOpacity
+        style={{ flex: 1 }}
+        onPress={onClose}
+      />
+      <View className="bg-white rounded-t-3xl p-6">
+        <View className="flex-row justify-between items-center mb-4">
+          <View className="flex-row items-center">
+            <View 
+              className="w-10 h-10 rounded-xl items-center justify-center mr-3"
+              style={{ backgroundColor: task.group_color }}
+            >
+              <Text className="text-xl">{task.group_icon}</Text>
+            </View>
+            <View>
+              <Text className="text-xl font-rubik-bold text-[#1A1A1A]" numberOfLines={2}>
+                {task.name}
+              </Text>
+              <Text className="text-sm font-rubik text-[#666876]">
+                {task.group_name}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            onPress={onClose}
+            className="p-2"
+          >
+            <Text className="text-[#7C3AED] font-rubik-medium">Close</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView className="flex-1">
+          {task.description && (
+            <View className="mb-6">
+              <Text className="text-sm font-rubik-medium text-[#1A1A1A] mb-2">Description</Text>
+              <Text className="text-base font-rubik text-[#666876]">
+                {task.description}
+              </Text>
+            </View>
+          )}
+
+          <View className="mb-6">
+            <Text className="text-sm font-rubik-medium text-[#1A1A1A] mb-2">Date Range</Text>
+            <View className="flex-row items-center bg-[#7C3AED08] p-3 rounded-xl">
+              <Image 
+                source={icons.calendar} 
+                style={{ 
+                  width: 18, 
+                  height: 18,
+                  tintColor: '#7C3AED',
+                  marginRight: 8
+                }}
+              />
+              <Text className="font-rubik text-base text-[#1A1A1A]">
+                {format(new Date(task.start_date), 'MMMM d, yyyy')} - {format(new Date(task.end_date), 'MMMM d, yyyy')}
+              </Text>
+            </View>
+          </View>
+
+          <View>
+            <Text className="text-sm font-rubik-medium text-[#1A1A1A] mb-2">Status</Text>
+            <View 
+              className="flex-row items-center bg-[#7C3AED08] p-3 rounded-xl"
+              style={{ borderWidth: 1, borderColor: '#7C3AED20' }}
+            >
+              <View 
+                className="w-3 h-3 rounded-full mr-2"
+                style={{ backgroundColor: task.completed ? '#22C55E' : '#7C3AED' }}
+              />
+              <Text className="font-rubik text-base text-[#1A1A1A]">
+                {task.completed ? 'Completed' : 'In Progress'}
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    </View>
+  </Modal>
+);
+
+const TaskCard = ({ task, onToggleComplete }: { task: Task, onToggleComplete: (taskId: string, completed: boolean) => void }) => {
+  const [showDetails, setShowDetails] = useState(false);
+  
+  return (
+  <>
+    <TouchableOpacity 
+      className='bg-white rounded-2xl p-4 mb-3'
+      onPress={() => setShowDetails(true)}
+      style={{ 
+        borderWidth: 1, 
+        borderColor: '#7C3AED20',
+        shadowColor: '#7C3AED',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+      }}
   >
     <View className='flex-row items-center mb-3'>
       <View 
@@ -79,10 +171,17 @@ const TaskCard = ({ task, onToggleComplete }: { task: Task, onToggleComplete: (t
         </Text>
       </View>
     </View>
-  </TouchableOpacity>
-)
+    </TouchableOpacity>
+    <TaskDetailsModal 
+      task={task}
+      visible={showDetails}
+      onClose={() => setShowDetails(false)}
+    />
+  </>
+  );
+}
 
-const Home = () => {
+export default function Home() {
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
@@ -100,13 +199,13 @@ const Home = () => {
   }, []);
 
   const fetchTasks = useCallback(async () => {
-    if (!session?.user) return;
-    
+    if (!session?.user?.id) return;
+
     const { data, error } = await supabase
       .from('tasks')
       .select('*')
       .eq('user_id', session.user.id)
-      .order('created_at', { ascending: false });
+      .order('start_date', { ascending: true });
 
     if (error) {
       console.error('Error fetching tasks:', error);
@@ -115,6 +214,13 @@ const Home = () => {
 
     setTasks(data || []);
   }, [session?.user?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchTasks();
+      return () => {};
+    }, [fetchTasks])
+  );
 
   const handleToggleComplete = async (taskId: string, completed: boolean) => {
     if (isUpdating) return;
@@ -183,7 +289,7 @@ const Home = () => {
                 <View className='flex flex-col items-start ml-3 justify-center'>
                   <Text className='text-sm font-rubik text-[#666876]'>Good Morning</Text>
                   <Text className='text-base font-rubik-medium text-[#1A1A1A]' numberOfLines={1}>
-                    {session.user.email}
+                    {session?.user?.email || 'Guest'}
                   </Text>
                 </View>
               </View>
@@ -263,8 +369,7 @@ const Home = () => {
                       setIsProcessing(true);
                       try {
                         const uri = await voiceService.stopRecording();
-                        const text = await voiceService.transcribeAudio(uri);
-                        const taskDetails = await voiceService.extractTaskDetails(text);
+                        const taskDetails = await voiceService.processVoiceRecording(uri);
                         
                         const { data: newTask, error } = await supabase.from('tasks').insert({
                           name: taskDetails.name,
@@ -398,5 +503,3 @@ const Home = () => {
     </LinearGradient>
   );
 };
-
-export default Home;

@@ -1,4 +1,4 @@
-import { View, Text, SafeAreaView, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
+import { View, Text, SafeAreaView, ScrollView, TouchableOpacity, Image, Alert, Modal } from 'react-native';
 import React, { useState, useEffect, useCallback } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../../lib/supabase';
@@ -19,6 +19,8 @@ const Calendar = () => {
   const [nylasConnected, setNylasConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [nylasToken, setNylasToken] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [isModalVisible, setIsModalVisible] = useState(false);
   const today = new Date();
 
   const handleNylasConnect = async () => {
@@ -221,6 +223,10 @@ const Calendar = () => {
                   return (
                     <TouchableOpacity
                       key={dayIndex}
+                      onPress={() => {
+                        setSelectedDate(currentDay);
+                        setIsModalVisible(true);
+                      }}
                       className={`flex-1 aspect-square justify-center items-center rounded-2xl m-1 ${isCurrentDay ? 'bg-[#7C3AED]' : dayTasks.length > 0 ? 'bg-[#7C3AED08]' : 'bg-white'}`}
                       style={{
                         borderWidth: 1.5,
@@ -256,6 +262,74 @@ const Calendar = () => {
             ))}
           </View>
         </ScrollView>
+
+        {/* Tasks Modal */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={isModalVisible}
+          onRequestClose={() => setIsModalVisible(false)}
+        >
+          <View className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+            <TouchableOpacity
+              style={{ flex: 1 }}
+              onPress={() => setIsModalVisible(false)}
+            />
+            <View className="bg-white rounded-t-3xl p-6" style={{ maxHeight: '80%' }}>
+              <View className="flex-row justify-between items-center mb-4">
+                <Text className="text-xl font-rubik-bold text-[#1A1A1A]">
+                  {selectedDate ? format(selectedDate, 'MMMM d, yyyy') : ''}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setIsModalVisible(false)}
+                  className="p-2"
+                >
+                  <Text className="text-[#7C3AED] font-rubik-medium">Close</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <ScrollView className="flex-1">
+                {selectedDate && getTasksForDate(selectedDate).length > 0 ? (
+                  getTasksForDate(selectedDate).map((task) => (
+                    <TouchableOpacity
+                      key={task.id}
+                      onPress={() => {
+                        setIsModalVisible(false);
+                        router.push(`/task/${task.id}`);
+                      }}
+                      className="bg-[#7C3AED08] p-4 rounded-2xl mb-3"
+                      style={{ borderWidth: 1, borderColor: '#7C3AED20' }}
+                    >
+                      <Text className="text-base font-rubik-medium text-[#1A1A1A] mb-1">
+                        {task.name}
+                      </Text>
+                      {task.description && (
+                        <Text className="text-sm font-rubik text-[#666876] mb-2">
+                          {task.description}
+                        </Text>
+                      )}
+                      <View className="flex-row items-center">
+                        <View 
+                          className="w-2 h-2 rounded-full mr-2"
+                          style={{ backgroundColor: task.group_color || '#7C3AED' }}
+                        />
+                        <Text className="text-xs font-rubik text-[#666876]">
+                          {task.group_name}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  <View className="flex-1 justify-center items-center py-8">
+                    <Text className="text-base font-rubik text-[#666876] text-center">
+                      No tasks scheduled for this day
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </LinearGradient>
   );

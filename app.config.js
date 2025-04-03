@@ -2,8 +2,7 @@ module.exports = {
   extra: {
     'eas': {
       'projectId': 'your-project-id'
-    },
-    'EXPO_PUBLIC_GROQ_API_KEY': process.env.EXPO_PUBLIC_GROQ_API_KEY || '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', // Replace with your actual Groq API key
+    }
   },
   expo: {
     experiments: {
