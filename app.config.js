@@ -1,5 +1,15 @@
 module.exports = {
+  extra: {
+    'eas': {
+      'projectId': 'your-project-id'
+    },
+    'EXPO_PUBLIC_GROQ_API_KEY': process.env.EXPO_PUBLIC_GROQ_API_KEY || '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', // Replace with your actual Groq API key
+  },
   expo: {
+    experiments: {
+      tsconfigPaths: true,
+      newArchEnabled: true
+    },
     name: 'TinyTasks',
     slug: 'tiny-tasks',
     version: '1.0.0',
@@ -23,8 +33,14 @@ module.exports = {
       bundler: 'metro'
     },
     plugins: [
-      'expo-router',
-      'expo-notifications'
+      [
+        'expo-notifications',
+        {
+          icon: './assets/icons/notification-icon.png',
+          color: '#7C3AED'
+        }
+      ],
+      'expo-router'
     ],
     scheme: 'tinytasks'
   }

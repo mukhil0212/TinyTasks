@@ -1,12 +1,12 @@
-import { View, Text, TouchableOpacity, SafeAreaView, Image, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, SafeAreaView, Image, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import React, { useEffect, useState, useCallback } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../../../lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import { format } from 'date-fns';
-import images from '@/constants/icons';
 import icons from '@/constants/icons';
+import { voiceService } from '../../../lib/voiceService';
 import { Task } from '../../../types/task';
 
 const TaskCard = ({ task, onToggleComplete }: { task: Task, onToggleComplete: (taskId: string, completed: boolean) => void }) => (
@@ -82,7 +82,9 @@ const TaskCard = ({ task, onToggleComplete }: { task: Task, onToggleComplete: (t
   </TouchableOpacity>
 )
 
-export default function Home() {
+const Home = () => {
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -167,7 +169,7 @@ export default function Home() {
               <View className='flex flex-row items-center'>
                 <View className='bg-[#7C3AED15] p-0.5 rounded-full'>
                   <Image 
-                    source={images.avatar} 
+                    source={require('@/assets/images/avatar.png')} 
                     style={{ 
                       width: 40, 
                       height: 40, 
@@ -252,9 +254,93 @@ export default function Home() {
             {/* Quick Actions */}
             <View className='mt-8 mb-24'>
               <Text className='text-xl font-rubik-bold text-[#1A1A1A] mb-4'>Quick Actions</Text>
-              <View className='flex-row justify-between'>
+              <View className='flex-row justify-between items-center'>
+                {/* Voice Input Button */}
                 <TouchableOpacity 
-                  onPress={() => router.push('./add-task')}
+                  onPress={async () => {
+                    try {
+                    if (isRecording) {
+                      setIsProcessing(true);
+                      try {
+                        const uri = await voiceService.stopRecording();
+                        const text = await voiceService.transcribeAudio(uri);
+                        const taskDetails = await voiceService.extractTaskDetails(text);
+                        
+                        const { data: newTask, error } = await supabase.from('tasks').insert({
+                          name: taskDetails.name,
+                          description: taskDetails.description || '',
+                          group_id: taskDetails.groupId || '3',
+                          group_name: taskDetails.groupName || 'Personal',
+                          group_icon: '📝',
+                          group_color: '#7C3AED',
+                          start_date: taskDetails.startDate || new Date().toISOString(),
+                          end_date: taskDetails.endDate || new Date().toISOString(),
+                          completed: false,
+                          user_id: session.user.id,
+                          created_at: new Date().toISOString(),
+                        }).select().single();
+
+                        if (error) throw error;
+                        await fetchTasks();
+                        Alert.alert('Success', 'Task created from voice input!');
+                      } catch (err) {
+                        console.error('Error processing voice input:', err);
+                        Alert.alert('Error', 'Failed to process voice input. Please try again.');
+                      } finally {
+                        setIsRecording(false);
+                        setIsProcessing(false);
+                      }
+                    } else {
+                      try {
+                        await voiceService.startRecording();
+                        setIsRecording(true);
+                      } catch (err) {
+                        console.error('Error starting recording:', err);
+                        Alert.alert('Error', 'Failed to start recording. Please try again.');
+                        setIsRecording(false);
+                      }
+                    }
+                    } catch (err) {
+                      console.error('Error with voice recording:', err);
+                      Alert.alert('Error', 'Something went wrong. Please try again.');
+                      setIsRecording(false);
+                      setIsProcessing(false);
+                    }
+                  }}
+                  className='bg-white rounded-2xl p-4 flex-1 mr-2 items-center'
+                  style={{ 
+                    borderWidth: 1, 
+                    borderColor: isRecording ? '#EF4444' : '#7C3AED20',
+                    shadowColor: isRecording ? '#EF4444' : '#7C3AED',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 2,
+                  }}
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? (
+                    <ActivityIndicator color="#7C3AED" />
+                  ) : (
+                    <>
+                      <View className='bg-[#7C3AED15] p-3 rounded-xl mb-2'>
+                        <Image 
+                          source={icons.mic} 
+                          style={{ 
+                            width: 20, 
+                            height: 20,
+                            tintColor: isRecording ? '#EF4444' : '#7C3AED'
+                          }}
+                        />
+                      </View>
+                      <Text className='font-rubik-medium text-sm text-[#1A1A1A]'>
+                        {isRecording ? 'Stop Recording' : 'Voice Input'}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  onPress={() => router.push('/add-task')}
                   className='bg-white rounded-2xl p-4 flex-1 mr-2 items-center'
                   style={{ 
                     borderWidth: 1, 
@@ -311,4 +397,6 @@ export default function Home() {
       </SafeAreaView>
     </LinearGradient>
   );
-}
+};
+
+export default Home;
