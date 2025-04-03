@@ -1,13 +1,8 @@
 import { Audio } from 'expo-av';
-import Groq from 'groq';
 import * as FileSystem from 'expo-file-system';
+import { Platform } from 'react-native';
 
-const transcriptionModel = 'whisper-large-v3-turbo'; // Best price/performance for multilingual
-const chatModel = 'mixtral-8x7b-32768';
-
-const groqClient = new Groq({
-  apiKey: process.env.EXPO_PUBLIC_GROQ_API_KEY || '',
-});
+const API_URL = 'http://10.0.0.66:3001/api';
 
 interface TaskDetails {
   name: string;
@@ -20,12 +15,12 @@ interface TaskDetails {
 
 class VoiceService {
   private recording: Audio.Recording | null = null;
+  private isRecording: boolean = false;
 
   constructor() {
     this.startRecording = this.startRecording.bind(this);
     this.stopRecording = this.stopRecording.bind(this);
-    this.transcribeAudio = this.transcribeAudio.bind(this);
-    this.extractTaskDetails = this.extractTaskDetails.bind(this);
+    this.processVoiceRecording = this.processVoiceRecording.bind(this);
   }
 
   async startRecording(): Promise<void> {
@@ -40,6 +35,7 @@ class VoiceService {
         Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
       this.recording = recording;
+      this.isRecording = true;
     } catch (err) {
       console.error('Failed to start recording', err);
       throw err;
@@ -47,85 +43,96 @@ class VoiceService {
   }
 
   async stopRecording(): Promise<string> {
-    if (!this.recording) {
-      throw new Error('No recording in progress');
-    }
-
     try {
+      if (!this.recording) {
+        throw new Error('Not recording');
+      }
+
+      console.log('Stopping recording..');
       await this.recording.stopAndUnloadAsync();
       const uri = this.recording.getURI();
       this.recording = null;
-      if (!uri) throw new Error('No recording URI available');
+      this.isRecording = false;
+
+      if (!uri) {
+        throw new Error('Recording failed: no audio file created');
+      }
+
+      console.log('Recording stopped and saved at', uri);
       return uri;
-    } catch (err) {
-      console.error('Failed to stop recording', err);
-      throw err;
+    } catch (error: unknown) {
+      console.error('Failed to stop recording', error);
+      this.recording = null;
+      this.isRecording = false;
+      const message = error instanceof Error ? error.message : 'Failed to stop recording';
+      throw new Error(message);
     }
   }
 
-  async transcribeAudio(uri: string): Promise<string> {
+  async processVoiceRecording(uri: string): Promise<TaskDetails> {
     try {
-      const audioFile = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      // Convert base64 to blob
-      const binaryString = atob(audioFile);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const blob = new Blob([bytes], { type: 'audio/m4a' });
-      const file = new File([blob], 'recording.m4a', { type: 'audio/m4a' });
-
-      const response = await groqClient.audio.transcriptions.create({
-        file,
-        model: transcriptionModel,
-        language: 'en', // Improves accuracy and latency
-        response_format: 'verbose_json',
-        temperature: 0, // Best for transcription accuracy
-        prompt: 'This is a voice recording for creating a task. The task may include a title, description, dates, and category.',
-      });
-
-      // Check transcription quality
-      const segments = response.segments || [];
-      for (const segment of segments) {
-        if (segment.avg_logprob < -0.5) {
-          console.warn('Low confidence in transcription segment:', segment);
-        }
-        if (segment.no_speech_prob > 0.8) {
-          console.warn('Possible non-speech segment detected:', segment);
-        }
+      // Check if the audio file exists
+      const audioInfo = await FileSystem.getInfoAsync(uri);
+      if (!audioInfo.exists) {
+        throw new Error('Audio file not found');
       }
 
-      return response.text;
-    } catch (err) {
-      console.error('Failed to transcribe audio', err);
-      throw err;
-    }
-  }
+      // Get file info
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      console.log('File info:', fileInfo);
 
-  async extractTaskDetails(text: string): Promise<TaskDetails> {
-    try {
-      const response = await groqClient.chat.completions.create({
-        model: chatModel,
-        messages: [
-          {
-            role: 'system',
-            content: 'Extract task details from the transcribed text. Return a JSON object with: name (required), description (optional), startDate (optional, ISO string), endDate (optional, ISO string), groupId (optional), and groupName (optional).'
-          },
-          {
-            role: 'user',
-            content: text
-          }
-        ]
+      // Create form data
+      const formData = new FormData();
+      
+      // Create file object
+      const fileUri = Platform.OS === 'ios' ? uri.replace('file://', '') : uri;
+      const file = {
+        uri: fileUri,
+        type: 'audio/m4a',
+        name: 'recording.m4a',
+      };
+      
+      // Append file to form data
+      formData.append('audio', file as any);
+      
+      console.log('File object:', file);
+      
+      console.log('Sending request to:', `${API_URL}/tasks/create-from-voice`);
+      
+      // Log request details
+      console.log('Request URL:', `${API_URL}/tasks/create-from-voice`);
+      console.log('Form data entries:', Array.from(formData.entries()));
+      
+      // Send to backend
+      const response = await fetch(`${API_URL}/tasks/create-from-voice`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Accept': 'application/json'
+        },
       });
+      
+      // Log response
+      console.log('Response status:', response.status);
+      
+      const responseData = await response.json();
+      console.log('Response data:', responseData);
+      
+      if (!response.ok) {
+        console.log('Server error response:', responseData);
+        throw new Error(responseData.error || 'Failed to process voice recording');
+      }
 
-      const taskDetails = JSON.parse(response.choices[0].message.content || '{}');
-      return taskDetails;
-    } catch (err) {
-      console.error('Failed to extract task details', err);
-      throw err;
+      if (!responseData.task || typeof responseData.task !== 'object' || !responseData.task.name) {
+        throw new Error('Invalid task data received from server');
+      }
+
+      return responseData.task as TaskDetails;
+
+    } catch (error: unknown) {
+      console.error('Failed to process voice recording:', error);
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      throw new Error(`Failed to process voice recording: ${message}`);
     }
   }
 }
