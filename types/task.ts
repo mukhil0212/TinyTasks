@@ -18,6 +18,7 @@ export interface Task {
   completed: boolean;
   user_id: string;
   created_at: string;
+  parent_id?: string;
   reminder?: Reminder;
   google_calendar_event_id?: string;
 }

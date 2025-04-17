@@ -105,5 +105,66 @@ def create_task_from_voice():
         except Exception as e:
             app.logger.error(f'Error deleting temporary file: {str(e)}')
 
+@app.route('/api/tasks/create-from-text', methods=['POST'])
+def create_task_from_text():
+    """Create a new task from text input"""
+    data = request.json or {}
+    text = data.get('text')
+    if not text:
+        return jsonify({'error': 'No text provided'}), 400
+    try:
+        # Extract task details via LLM
+        extraction_response = groq_client.chat.completions.create(
+            model=CHAT_MODEL,
+            messages=[
+                {'role': 'system', 'content': (
+                    'Extract task details from the following text. ' 
+                    'Return ONLY a JSON object with fields: ' 
+                    'name (string), description (optional), ' 
+                    'startDate (ISO string, optional), endDate (ISO string, optional), groupName (optional).' )
+                },
+                {'role': 'user', 'content': text}
+            ],
+            temperature=0.2,
+            response_format={'type': 'json_object'}
+        )
+        message_content = extraction_response.choices[0].message.content
+        task_details = json.loads(message_content)
+        if not isinstance(task_details, dict) or 'name' not in task_details:
+            return jsonify({'error': 'Invalid task details format'}), 400
+        return jsonify({'task': task_details}), 201
+    except Exception as e:
+        app.logger.error(f'Error processing text task: {str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/tasks/split-subtasks', methods=['POST'])
+def split_subtasks():
+    """Split a task into subtasks via LLM"""
+    data = request.json or {}
+    task = data.get('task')
+    if not isinstance(task, dict) or 'name' not in task:
+        return jsonify({'error': 'Invalid task provided'}), 400
+    try:
+        prompt = (
+            'Split the following task into smaller, manageable subtasks. ' 
+            'Return a JSON object with a "subtasks" field containing an array of objects. '
+            'Each subtask object should have: name (string), description (optional). '
+            f'Original task name: {task.get("name")}. '
+            f'Description: {task.get("description", "")}')
+        split_response = groq_client.chat.completions.create(
+            model=CHAT_MODEL,
+            messages=[{'role': 'system', 'content': prompt}],
+            temperature=0.2,
+            response_format={'type': 'json_object'}
+        )
+        content = split_response.choices[0].message.content
+        response_data = json.loads(content)
+        if not isinstance(response_data, dict) or 'subtasks' not in response_data or not isinstance(response_data['subtasks'], list):
+            raise ValueError('Expected JSON object with subtasks array')
+        return jsonify({'subtasks': response_data['subtasks']}), 200
+    except Exception as e:
+        app.logger.error(f'Error splitting task into subtasks: {str(e)}')
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=3001, debug=True)
