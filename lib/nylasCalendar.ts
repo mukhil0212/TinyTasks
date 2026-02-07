@@ -132,6 +132,20 @@ export const nylasCalendarService = {
 
   async exchangeCodeForToken(code: string) {
     try {
+      // ⚠️ SECURITY WARNING: This function exposes the client secret in client-side code!
+      // EXPO_PUBLIC_ prefix makes this variable accessible in the bundled JavaScript.
+      // 
+      // CRITICAL ISSUE: Client secrets should NEVER be exposed to clients.
+      // 
+      // RECOMMENDED FIX: Implement a backend proxy endpoint that:
+      // 1. Receives the authorization code from the client
+      // 2. Performs the token exchange server-side with the client secret
+      // 3. Returns only the access token to the client
+      // 
+      // This prevents the client secret from being visible in:
+      // - Browser/app developer tools
+      // - JavaScript bundle inspection
+      // - Network traffic monitoring
       const response = await fetch(`${NYLAS_API_URL}/oauth/token`, {
         method: 'POST',
         headers: {
@@ -142,7 +156,7 @@ export const nylasCalendarService = {
         mode: 'cors',
         body: JSON.stringify({
           client_id: process.env.EXPO_PUBLIC_NYLAS_CLIENT_ID,
-          client_secret: process.env.EXPO_PUBLIC_NYLAS_CLIENT_SECRET,
+          client_secret: process.env.EXPO_PUBLIC_NYLAS_CLIENT_SECRET, // ⚠️ EXPOSED TO CLIENT
           grant_type: 'authorization_code',
           code: code,
           redirect_uri: process.env.EXPO_PUBLIC_NYLAS_REDIRECT_URI,
