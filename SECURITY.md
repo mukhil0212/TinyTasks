@@ -194,6 +194,23 @@ The recommended solution involves implementing a backend proxy service to handle
 
 ---
 
+## Additional Findings: Dependency Vulnerabilities
+
+An npm audit revealed 21 vulnerabilities in dependencies:
+- 1 Critical: form-data unsafe random function
+- 7 High: node-forge, tar, image-size, glob vulnerabilities
+- 5 Moderate: @babel/helpers, @babel/runtime, @supabase/auth-js, js-yaml, lodash, undici
+- 8 Low: various vulnerabilities
+
+**Recommended Action:** Run `npm audit fix` to address most issues. Some packages may require manual updates or breaking changes.
+
+Key Dependency Issues to Address:
+1. **@supabase/auth-js** - Vulnerable to insecure path routing (upgrade to >=2.69.1)
+2. **form-data** - Critical: uses unsafe random function (upgrade to fixed version)
+3. **tar** - High: vulnerable to arbitrary file overwrite (may require Expo upgrade)
+
+---
+
 ## References
 
 - [Expo Environment Variables Documentation](https://docs.expo.dev/guides/environment-variables/)
